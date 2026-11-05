@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.venv
+venv/
+ENV/
+
+# Data Lakehouse local storage
+data/raw/
+data/lakehouse/*.duckdb
+data/lakehouse/*.wal
+data/lakehouse/*.tmp
+
+# Testing & Cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS Specific
+.DS_Store
+Thumbs.db
