@@ -1,6 +1,6 @@
 # 🚢 AegisSea: Maritime Telemetry & Port Congestion Lakehouse
 
-[![Geospatial CI](https://github.com/your-username/aegis-maritime-lakehouse/actions/workflows/ci.yml/badge.svg)](https://github.com/your-username/aegis-maritime-lakehouse/actions)
+[![Geospatial CI](https://github.com/Abbderahmenblk31/aegis-maritime-lakehouse/actions/workflows/ci.yml/badge.svg)](https://github.com/Abbderahmenblk31/aegis-maritime-lakehouse/actions)
 [![DuckDB Spatial](https://img.shields.io/badge/Engine-DuckDB%20Spatial-yellow.svg)](https://duckdb.org/)
 [![Data Source](https://img.shields.io/badge/Data-100%25%20Real%20AIS%20Telemetry-blue.svg)](https://www.digitraffic.fi/)
 [![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13-brightgreen.svg)](https://python.org)
@@ -98,7 +98,7 @@ PORT CONGESTION & SUPPLY CHAIN BOTTLENECK SCORECARD (LIVE)
 
 ### 1. Clone the repository:
 ```bash
-git clone https://github.com/your-username/aegis-maritime-lakehouse.git
+git clone https://github.com/Abbderahmenblk31/aegis-maritime-lakehouse.git
 cd aegis-maritime-lakehouse
 ```
 
