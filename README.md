@@ -1,9 +1,11 @@
 # 🚢 AegisSea: Maritime Telemetry & Port Congestion Lakehouse
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Streamlit%20Cloud-FF4B4B.svg?style=for-the-badge&logo=streamlit)](https://abbderahmenblk31-aegis-maritime-lakehouse-dashboardapp-rlrsjs.streamlit.app/)
 [![Geospatial CI](https://github.com/Abbderahmenblk31/aegis-maritime-lakehouse/actions/workflows/ci.yml/badge.svg)](https://github.com/Abbderahmenblk31/aegis-maritime-lakehouse/actions)
 [![DuckDB Spatial](https://img.shields.io/badge/Engine-DuckDB%20Spatial-yellow.svg)](https://duckdb.org/)
 [![Data Source](https://img.shields.io/badge/Data-100%25%20Real%20AIS%20Telemetry-blue.svg)](https://www.digitraffic.fi/)
-[![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13-brightgreen.svg)](https://python.org)
+
+> 🔗 **Interactive Cloud Application:** [Launch AegisSea Live Dashboard](https://abbderahmenblk31-aegis-maritime-lakehouse-dashboardapp-rlrsjs.streamlit.app/)
 
 An enterprise-grade **Geospatial Data Engineering & Economic Analytics Platform** that ingests **100% genuine live AIS (Automatic Identification System) vessel telemetry** across Northern European shipping corridors, models spatial trajectories in an embedded **DuckDB Lakehouse**, and generates real-time **Port Congestion & Supply Chain Bottleneck Scorecards**.
 
