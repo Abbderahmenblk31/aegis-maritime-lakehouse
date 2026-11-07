@@ -8,7 +8,6 @@ ENV/
 
 # Data Lakehouse local storage
 data/raw/
-data/lakehouse/*.duckdb
 data/lakehouse/*.wal
 data/lakehouse/*.tmp
 

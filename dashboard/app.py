@@ -7,6 +7,7 @@ actionable multi-million dollar supply chain financial analytics.
 """
 
 import os
+import sys
 import duckdb
 import streamlit as st
 import pydeck as pdk
@@ -26,8 +27,17 @@ DB_PATH = os.path.join(BASE_DIR, "data", "lakehouse", "maritime_lakehouse.duckdb
 
 @st.cache_data(ttl=60)
 def load_lakehouse_data():
+    if not os.path.exists(DB_PATH):
+        import subprocess
+        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+        subprocess.run([sys.executable, os.path.join(BASE_DIR, "ingest_engine", "ingest.py")], check=True)
+        subprocess.run([sys.executable, os.path.join(BASE_DIR, "models", "spatial_analysis.py")], check=True)
+
     con = duckdb.connect(DB_PATH, read_only=True)
-    con.execute("INSTALL spatial; LOAD spatial;")
+    try:
+        con.execute("INSTALL spatial; LOAD spatial;")
+    except Exception:
+        pass
     
     vessels_df = con.execute("""
         SELECT 
