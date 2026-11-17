@@ -156,6 +156,128 @@ def run_spatial_transformations():
         ORDER BY daily_demurrage_loss_usd DESC;
     """)
     
+    # 5. Gold Mart: Prescriptive Vessel Rerouting & Demurrage Mitigation Optimizer
+    print("[5/5] Generating Prescriptive Vessel Rerouting Optimizer...")
+    con.execute("""
+        CREATE OR REPLACE TABLE mart_prescriptive_vessel_rerouting AS
+        WITH latest_vessels AS (
+            SELECT DISTINCT ON (mmsi)
+                mmsi,
+                vessel_name,
+                ship_category,
+                latitude,
+                longitude,
+                speed_knots_clean,
+                draught_m
+            FROM silver_vessel_telemetry
+            ORDER BY mmsi, ingestion_timestamp DESC
+        ),
+        waiting_vessels AS (
+            SELECT 
+                v.mmsi,
+                v.vessel_name,
+                v.ship_category,
+                v.latitude,
+                v.longitude,
+                p.port_id as current_port_id,
+                p.port_name as current_port_name,
+                c.anchored_or_idle_vessels as current_port_queue,
+                c.congestion_occupancy_pct as current_port_congestion,
+                ROUND(6371 * 2 * ASIN(SQRT(
+                    POWER(SIN(RADIANS(p.center_lat - v.latitude) / 2), 2) +
+                    COS(RADIANS(v.latitude)) * COS(RADIANS(p.center_lat)) *
+                    POWER(SIN(RADIANS(p.center_lon - v.longitude) / 2), 2)
+                )), 2) as dist_to_current_port_km,
+                CASE 
+                    WHEN v.ship_category LIKE '%Tanker%' THEN 45000.0
+                    WHEN v.ship_category LIKE '%Cargo%' THEN 25000.0
+                    ELSE 15000.0
+                END as daily_demurrage_usd,
+                CASE 
+                    WHEN v.ship_category LIKE '%Tanker%' THEN 0.08
+                    WHEN v.ship_category LIKE '%Cargo%' THEN 0.05
+                    ELSE 0.03
+                END as fuel_burn_mt_per_nm
+            FROM latest_vessels v
+            CROSS JOIN dim_ports p
+            JOIN mart_port_congestion c ON p.port_id = c.port_id
+            WHERE (6371 * 2 * ASIN(SQRT(
+                    POWER(SIN(RADIANS(p.center_lat - v.latitude) / 2), 2) +
+                    COS(RADIANS(v.latitude)) * COS(RADIANS(p.center_lat)) *
+                    POWER(SIN(RADIANS(p.center_lon - v.longitude) / 2), 2)
+                  ))) <= p.anchorage_radius_km
+              AND (v.speed_knots_clean < 2.0 OR v.speed_knots_clean IS NULL)
+        ),
+        alternate_options AS (
+            SELECT 
+                w.mmsi,
+                w.vessel_name,
+                w.ship_category,
+                w.current_port_id,
+                w.current_port_name,
+                w.current_port_queue,
+                w.daily_demurrage_usd,
+                alt.port_id as alt_port_id,
+                alt.port_name as alt_port_name,
+                alt_c.anchored_or_idle_vessels as alt_port_queue,
+                ROUND(6371 * 2 * ASIN(SQRT(
+                    POWER(SIN(RADIANS(alt.center_lat - w.latitude) / 2), 2) +
+                    COS(RADIANS(w.latitude)) * COS(RADIANS(alt.center_lat)) *
+                    POWER(SIN(RADIANS(alt.center_lon - w.longitude) / 2), 2)
+                )), 2) as dist_to_alt_port_km,
+                ROUND((6371 * 2 * ASIN(SQRT(
+                    POWER(SIN(RADIANS(alt.center_lat - w.latitude) / 2), 2) +
+                    COS(RADIANS(w.latitude)) * COS(RADIANS(alt.center_lat)) *
+                    POWER(SIN(RADIANS(alt.center_lon - w.longitude) / 2), 2)
+                )) / 1.852) * w.fuel_burn_mt_per_nm * 650.0, 0) as diversion_fuel_cost_usd,
+                ROUND((w.current_port_queue * 4.0) / 24.0, 2) as current_port_delay_days,
+                ROUND((alt_c.anchored_or_idle_vessels * 4.0) / 24.0, 2) as alt_port_delay_days
+            FROM waiting_vessels w
+            CROSS JOIN dim_ports alt
+            JOIN mart_port_congestion alt_c ON alt.port_id = alt_c.port_id
+            WHERE alt.port_id != w.current_port_id
+        ),
+        calculated AS (
+            SELECT 
+                *,
+                ROUND((current_port_delay_days - alt_port_delay_days) * daily_demurrage_usd - diversion_fuel_cost_usd, 0) as net_economic_savings_usd,
+                ROW_NUMBER() OVER (
+                    PARTITION BY mmsi 
+                    ORDER BY ((current_port_delay_days - alt_port_delay_days) * daily_demurrage_usd - diversion_fuel_cost_usd) DESC
+                ) as opt_rank
+            FROM alternate_options
+        )
+        SELECT 
+            mmsi,
+            vessel_name,
+            ship_category,
+            current_port_name,
+            current_port_queue,
+            alt_port_name as optimal_diversion_port,
+            alt_port_queue,
+            dist_to_alt_port_km,
+            diversion_fuel_cost_usd,
+            ROUND(current_port_delay_days * daily_demurrage_usd, 0) as projected_current_demurrage_usd,
+            net_economic_savings_usd,
+            CASE 
+                WHEN net_economic_savings_usd > 20000 THEN '🚨 DIVERT TO ALTERNATE PORT'
+                WHEN current_port_queue > 15 THEN '⚠️ SLOW STEAMING DIRECTIVE'
+                ELSE '✅ MAINTAIN CURRENT BERTH'
+            END as prescriptive_action,
+            CASE 
+                WHEN net_economic_savings_usd > 20000 THEN 
+                    CONCAT('Divert to ', alt_port_name, ' (Queue: ', CAST(alt_port_queue AS VARCHAR), ' ships). Avoids $', CAST(ROUND(current_port_delay_days * daily_demurrage_usd, 0) AS VARCHAR), ' demurrage for $', CAST(diversion_fuel_cost_usd AS VARCHAR), ' bunker fuel.')
+                WHEN current_port_queue > 15 THEN 
+                    'Reduce cruising speed to 9 knots to absorb bottleneck arrival delay and save bunker fuel.'
+                ELSE 
+                    'Transit distance to alternative terminals exceeds demurrage penalty savings. Hold position.'
+            END as decision_rationale
+        FROM calculated
+        WHERE opt_rank = 1
+        ORDER BY net_economic_savings_usd DESC;
+    """)
+    print("   -> Prescriptive vessel rerouting recommendations generated.")
+    
     print("\n" + "="*80)
     print("💰 FINANCIAL SUPPLY CHAIN DEMURRAGE LOSS SCORECARD (LIVE)")
     print("="*80)

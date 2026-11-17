@@ -59,8 +59,13 @@ def load_lakehouse_data():
     congestion_df = con.execute("SELECT * FROM mart_port_congestion ORDER BY daily_demurrage_loss_usd DESC;").df()
     ports_df = con.execute("SELECT * FROM dim_ports;").df()
     
+    try:
+        rerouting_df = con.execute("SELECT * FROM mart_prescriptive_vessel_rerouting ORDER BY net_economic_savings_usd DESC;").df()
+    except Exception:
+        rerouting_df = pd.DataFrame()
+        
     con.close()
-    return vessels_df, congestion_df, ports_df
+    return vessels_df, congestion_df, ports_df, rerouting_df
 
 # Title and Header
 st.markdown("""
@@ -81,7 +86,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 try:
-    vessels_df, congestion_df, ports_df = load_lakehouse_data()
+    vessels_df, congestion_df, ports_df, rerouting_df = load_lakehouse_data()
 except Exception as e:
     st.error(f"Lakehouse connection error: {e}")
     st.stop()
@@ -139,10 +144,11 @@ with col4:
 st.markdown("---")
 
 # Navigation Tabs
-tab1, tab2, tab3 = st.tabs([
+tab1, tab2, tab3, tab4 = st.tabs([
     "💰 Financial Demurrage Analysis",
     "🗺️ 3D Geospatial Fleet & Port Map",
-    "🔍 Vessel Cost & Fleet Inspector"
+    "🔍 Vessel Cost & Fleet Inspector",
+    "🤖 Prescriptive Vessel Rerouting Optimizer"
 ])
 
 with tab1:
@@ -246,6 +252,89 @@ with tab3:
         ]].sort_values(by="speed_knots", ascending=False),
         use_container_width=True
     )
+
+with tab4:
+    st.subheader("🤖 Prescriptive Decision Intelligence: Vessel Rerouting & Demurrage Mitigation")
+    st.caption("Physics & economic optimization comparing Port Demurrage Waiting Costs vs Bunker Fuel Transit Burn ($650/MT VLSFO).")
+    
+    if not rerouting_df.empty:
+        total_potential_savings = float(rerouting_df["net_economic_savings_usd"].clip(lower=0).sum())
+        total_divert_actions = int((rerouting_df["prescriptive_action"] == "🚨 DIVERT TO ALTERNATE PORT").sum())
+        total_slow_steaming = int((rerouting_df["prescriptive_action"] == "⚠️ SLOW STEAMING DIRECTIVE").sum())
+        
+        rc1, rc2, rc3, rc4 = st.columns(4)
+        rc1.metric("Net Economic Capital Saved", f"${total_potential_savings:,.0f} USD", delta="Demurrage Penalty Avoided", delta_color="normal")
+        rc2.metric("Recommended Port Diversions", f"{total_divert_actions} Vessels", delta="High Queue Avoidance", delta_color="normal")
+        rc3.metric("Slow Steaming Advisories", f"{total_slow_steaming} Vessels", delta="Fuel Conservation Mode")
+        rc4.metric("Benchmark Bunker Fuel Rate", "$650 / MT", delta="VLSFO Marine Standard")
+        
+        # Action filter
+        action_filter = st.radio("Filter Prescriptive Action Category:", ["All Decisions", "🚨 Divert Only", "⚠️ Slow Steaming Only"], horizontal=True)
+        display_df = rerouting_df.copy()
+        if action_filter == "🚨 Divert Only":
+            display_df = display_df[display_df["prescriptive_action"] == "🚨 DIVERT TO ALTERNATE PORT"]
+        elif action_filter == "⚠️ Slow Steaming Only":
+            display_df = display_df[display_df["prescriptive_action"] == "⚠️ SLOW STEAMING DIRECTIVE"]
+            
+        st.markdown("### 📋 Prescriptive Voyage Re-routing Matrix")
+        st.dataframe(
+            display_df[[
+                "vessel_name", "ship_category", "current_port_name", "current_port_queue",
+                "optimal_diversion_port", "alt_port_queue", "dist_to_alt_port_km",
+                "diversion_fuel_cost_usd", "projected_current_demurrage_usd",
+                "net_economic_savings_usd", "prescriptive_action", "decision_rationale"
+            ]].rename(columns={
+                "vessel_name": "Vessel Name",
+                "ship_category": "Vessel Class",
+                "current_port_name": "Current Bottleneck",
+                "current_port_queue": "Current Queue",
+                "optimal_diversion_port": "Recommended Terminal",
+                "alt_port_queue": "Target Queue",
+                "dist_to_alt_port_km": "Transit Dist (km)",
+                "diversion_fuel_cost_usd": "Bunker Fuel Cost ($)",
+                "projected_current_demurrage_usd": "Gross Demurrage ($)",
+                "net_economic_savings_usd": "Net Savings ($)",
+                "prescriptive_action": "Prescriptive Action",
+                "decision_rationale": "Automated Decision Intelligence Rationale"
+            }),
+            use_container_width=True
+        )
+        
+        # Cost-Benefit Chart for Top 10 Divert Opportunities
+        st.markdown("### 📊 Top 10 Economic Diversion Opportunities (Demurrage Avoidance vs Fuel Burn)")
+        top_divert = rerouting_df.head(10)
+        
+        import plotly.graph_objects as go
+        fig_divert = go.Figure()
+        fig_divert.add_trace(go.Bar(
+            x=top_divert["vessel_name"],
+            y=top_divert["projected_current_demurrage_usd"],
+            name="Projected Demurrage Delay Penalty ($)",
+            marker_color="#ef4444"
+        ))
+        fig_divert.add_trace(go.Bar(
+            x=top_divert["vessel_name"],
+            y=top_divert["diversion_fuel_cost_usd"],
+            name="Diversion Bunker Fuel Cost ($)",
+            marker_color="#f59e0b"
+        ))
+        fig_divert.add_trace(go.Bar(
+            x=top_divert["vessel_name"],
+            y=top_divert["net_economic_savings_usd"],
+            name="Net Capital Saved ($)",
+            marker_color="#10b981"
+        ))
+        fig_divert.update_layout(
+            barmode="group",
+            template="plotly_dark",
+            height=450,
+            xaxis_title="Vessel",
+            yaxis_title="USD ($)",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+        st.plotly_chart(fig_divert, use_container_width=True)
+    else:
+        st.info("Prescriptive rerouting optimizer initializing. Please click 'Trigger Live Telemetry Fetch'.")
 
 st.sidebar.title("⚓ Pipeline Operations")
 st.sidebar.markdown(f"""

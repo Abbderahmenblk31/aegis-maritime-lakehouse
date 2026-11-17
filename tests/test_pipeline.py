@@ -53,5 +53,16 @@ def test_gold_congestion_marts(db_conn):
     valid_pct = df["congestion_occupancy_pct"].dropna()
     assert (valid_pct >= 0).all() and (valid_pct <= 100).all()
 
+def test_prescriptive_vessel_rerouting(db_conn):
+    """Verifies prescriptive vessel rerouting recommendations and cost savings logic."""
+    df = db_conn.execute("SELECT * FROM mart_prescriptive_vessel_rerouting").df()
+    assert len(df) > 0, "Prescriptive rerouting mart is empty!"
+    assert "prescriptive_action" in df.columns
+    assert "net_economic_savings_usd" in df.columns
+    # Ensure divert action has positive net savings
+    divert_rows = df[df["prescriptive_action"] == "🚨 DIVERT TO ALTERNATE PORT"]
+    if len(divert_rows) > 0:
+        assert (divert_rows["net_economic_savings_usd"] > 0).all(), "Divert recommendations must yield positive net savings!"
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
