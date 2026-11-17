@@ -12,6 +12,7 @@ import duckdb
 import streamlit as st
 import pydeck as pdk
 import pandas as pd
+import plotly.graph_objects as go
 
 # Page Configuration
 st.set_page_config(
@@ -304,7 +305,6 @@ with tab4:
         st.markdown("### 📊 Top 10 Economic Diversion Opportunities (Demurrage Avoidance vs Fuel Burn)")
         top_divert = rerouting_df.head(10)
         
-        import plotly.graph_objects as go
         fig_divert = go.Figure()
         fig_divert.add_trace(go.Bar(
             x=top_divert["vessel_name"],
